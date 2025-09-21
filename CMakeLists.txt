@@ -50,6 +50,19 @@ endif()
 target_link_libraries(FindMyEPUdatasets PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 target_link_libraries(FindMyEPUdatasets PRIVATE Qt${QT_VERSION_MAJOR}::PrintSupport)
 
+
+target_include_directories(FindMyEPUdatasets PRIVATE ../alglib/src)
+target_sources(FindMyEPUdatasets PRIVATE
+    ../alglib/src/alglibinternal.cpp
+    ../alglib/src/alglibmisc.cpp
+    ../alglib/src/dataanalysis.cpp
+    ../alglib/src/ap.cpp
+    ../alglib/src/statistics.cpp
+    ../alglib/src/linalg.cpp
+    ../alglib/src/specialfunctions.cpp
+    ../alglib/src/optimization.cpp
+    ../alglib/src/solvers.cpp
+)
 set_target_properties(FindMyEPUdatasets PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER my.example.com
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}

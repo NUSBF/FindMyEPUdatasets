@@ -9,6 +9,8 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QTime>
+#include "dataanalysis.h"
+using namespace alglib;
 
 
 
@@ -58,7 +60,7 @@ void MainWindow::on_pushButtonMoviesDirectory_clicked()
     QString path = QDir::cleanPath(ui->labelSelectedDirectoryMovie->text());
     currentdir = QDir(path);
     QStringList MovieFilter;
-    MovieFilter << "*.xml" << "*.eer" << "*.tiff" << "*.mrc";
+    MovieFilter << "FoilHole*Data*.xml" << "*.eer" << "*.tiff" << "*.mrc";
 
     // Count total files for progress bar
     int totalFiles = 0;
@@ -315,27 +317,70 @@ void MainWindow::on_pushButtonMoviesDirectory_clicked()
                        << "20: Group";
             tableWidget->setHorizontalHeaderLabels(headerList);
 
+            //layout
+
             QVBoxLayout *layout = new QVBoxLayout(tab);
             layout->addWidget(tableWidget);
-
             QWidget *tabGraph = new QWidget();
             ui->tabWidgetGraph->addTab(tabGraph, datasetName);
             ui->tabWidgetGraph->setCurrentWidget(tabGraph);
-
             // Create two QCustomPlot widgets
             QCustomPlot *plotTotalDose = new QCustomPlot(tabGraph);
             QCustomPlot *plotBeamShifts = new QCustomPlot(tabGraph);
 
             // Create layout to split tab in half
             QHBoxLayout *layoutgraph = new QHBoxLayout(tabGraph);
+
+            // Left side: Total Dose plot (unchanged)
             layoutgraph->addWidget(plotTotalDose);
-            layoutgraph->addWidget(plotBeamShifts);
+
+            // Right side: Create vertical layout for Beam Shifts section
+            QVBoxLayout *beamShiftsLayout = new QVBoxLayout();
+
+            // Create label and text box for the right side
+            QLabel *beamShiftsLabel = new QLabel("Number of Clusters:", tabGraph);
+            beamShiftsLabel->setFont(QFont("sans", 10, QFont::Bold));
+
+            QLineEdit *beamShiftsTextBox = new QLineEdit(tabGraph);
+            beamShiftsTextBox->setObjectName("clustersTextBox");
+            beamShiftsTextBox->setMaximumHeight(25);
+            beamShiftsTextBox->setMaximumWidth(50);
+            beamShiftsTextBox->setText("15");
+            beamShiftsTextBox->setValidator(new QIntValidator(1, 100, beamShiftsTextBox));
+            QPushButton *recalculateButton = new QPushButton("Recalculate Clusters", tabGraph);
+            connect(recalculateButton, &QPushButton::clicked, this, &MainWindow::onRecalculateClustersClicked);
+
+
+            // Create horizontal layout for label, text box and button
+            QHBoxLayout *beamShiftsInputLayout = new QHBoxLayout();
+            beamShiftsInputLayout->addWidget(beamShiftsLabel);
+            beamShiftsInputLayout->addWidget(beamShiftsTextBox);
+            beamShiftsInputLayout->addWidget(recalculateButton);
+            beamShiftsInputLayout->addStretch();
+
+            // Add input layout and plot to the beam shifts section
+            beamShiftsLayout->addLayout(beamShiftsInputLayout);
+            beamShiftsLayout->addWidget(plotBeamShifts);
+
+            // Create widget container for the right side
+            QWidget *beamShiftsWidget = new QWidget();
+            beamShiftsWidget->setLayout(beamShiftsLayout);
+
+            // Add to main layout with equal stretch
+            layoutgraph->addWidget(beamShiftsWidget);
+            layoutgraph->setStretch(0, 1);  // Left side gets weight 1
+            layoutgraph->setStretch(1, 1);  // Right side gets weight 1
+
             plotTotalDose->addGraph();
             plotTotalDose->graph(0)->setPen(QPen(Qt::red));
             plotBeamShifts->addGraph();
             plotBeamShifts->graph(0)->setScatterStyle(QCPScatterStyle::ssCross);
             plotBeamShifts->graph(0)->setLineStyle(QCPGraph::lsNone);
             plotBeamShifts->replot();
+
+
+
+
 
             // Set graph titles
             plotTotalDose->plotLayout()->insertRow(0);
@@ -559,7 +604,7 @@ void MainWindow::on_pushButtonMoviesDirectory_clicked()
 
             QElapsedTimer clusterTimer;
             clusterTimer.start();
-            clusterAndRecolorBeamShifts(plotBeamShifts, listrgb);
+            clusterAndRecolorBeamShifts(plotBeamShifts);
             qDebug() << "Clustering took:" << clusterTimer.elapsed() << "ms";
 
             // Fill Group column in table
@@ -960,261 +1005,158 @@ MainWindow::XMLData MainWindow::parseXMLFile(const QString& xmlFilePath)
     return data;
 }
 
-double MainWindow::calculateDistance(const DataPoint& p1, const DataPoint& p2)
-{
-    return sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
-}
-
-QVector<QVector<MainWindow::DataPoint>> MainWindow::kMeansClustering(QVector<DataPoint>& points, int k, int maxIterations)
-{
-    if (points.isEmpty() || k <= 0) return {};
-
-    QVector<DataPoint> centroids;
-    for (int i = 0; i < k; ++i) {
-        centroids.append(points[i % points.size()]);
-    }
-
-    for (int iter = 0; iter < maxIterations; ++iter) {
-        for (auto& point : points) {
-            double minDist = std::numeric_limits<double>::max();
-            int bestCluster = 0;
-
-            for (int i = 0; i < centroids.size(); ++i) {
-                double dist = calculateDistance(point, centroids[i]);
-                if (dist < minDist) {
-                    minDist = dist;
-                    bestCluster = i;
-                }
-            }
-            point.cluster = bestCluster;
-        }
-
-        QVector<DataPoint> newCentroids;
-        for (int i = 0; i < k; ++i) {
-            double sumX = 0, sumY = 0;
-            int count = 0;
-
-            for (const auto& point : points) {
-                if (point.cluster == i) {
-                    sumX += point.x;
-                    sumY += point.y;
-                    count++;
-                }
-            }
-
-            if (count > 0) {
-                newCentroids.append(DataPoint(sumX / count, sumY / count));
-            } else {
-                newCentroids.append(centroids[i]);
-            }
-        }
-
-        bool converged = true;
-        for (int i = 0; i < k; ++i) {
-            if (calculateDistance(centroids[i], newCentroids[i]) > 0.001) {
-                converged = false;
-                break;
-            }
-        }
-
-        centroids = newCentroids;
-        if (converged) break;
-    }
-
-    QVector<QVector<DataPoint>> clusters(k);
-    for (const auto& point : points) {
-        if (point.cluster >= 0 && point.cluster < k) {
-            clusters[point.cluster].append(point);
-        }
-    }
-
-    return clusters;
-}
-
-int MainWindow::autoDetectClusters(const QVector<DataPoint>& points, int maxK)
-{
-    QVector<double> wcss;
-    if (maxK == 15) maxK = qMin(99, points.size() / 3);
-
-    for (int k = 1; k <= maxK && k < points.size(); ++k) {
-        QVector<DataPoint> tempPoints = points;
-        auto clusters = kMeansClustering(tempPoints, k);
-        double totalWCSS = 0;
-        for (int i = 0; i < clusters.size(); ++i) {
-            double sumX = 0, sumY = 0;
-            for (const auto& point : clusters[i]) {
-                sumX += point.x;
-                sumY += point.y;
-            }
-            if (clusters[i].size() > 0) {
-                DataPoint centroid(sumX / clusters[i].size(), sumY / clusters[i].size());
-                for (const auto& point : clusters[i]) {
-                    totalWCSS += pow(calculateDistance(point, centroid), 2);
-                }
-            }
-        }
-        wcss.append(totalWCSS);
-    }
-
-    // NEW: More aggressive cluster detection
-    int bestK = maxK / 2;  // Start with more clusters
-    double maxDecrease = 0;
-
-    // Look for the steepest drop in WCSS
-    for (int i = 2; i < wcss.size() && i < 20; ++i) {  // Check up to 20 clusters
-        double decrease = wcss[i-1] - wcss[i];
-        double percentDecrease = decrease / wcss[i-1];
-
-        // If decrease is less than 5%, we've found our elbow
-        if (percentDecrease < 0.05 && i > 8) {  // Minimum 8 clusters
-            bestK = i;
-            break;
-        }
-
-        if (decrease > maxDecrease) {
-            maxDecrease = decrease;
-            bestK = i + 1;
-        }
-    }
-
-    // Force minimum clusters based on data size
-    int minClusters = qMax(8, points.size() / 50);  // At least 8, or 1 cluster per 50 points
-
-    return qMax(minClusters, qMin(bestK, maxK));
-}
-
-void MainWindow::clusterAndRecolorBeamShifts(QCustomPlot* plot, const QList<QRgb>& colorScheme, int graphIndex) {
-    if (!plot || plot->graphCount() <= graphIndex) {
-        qDebug() << "ERROR: Invalid plot or graph index";
-        return;
-    }
-    // Extract points
-    QVector<DataPoint> points;
-    auto dataContainer = plot->graph(graphIndex)->data();
-    for (auto it = dataContainer->begin(); it != dataContainer->end(); ++it) {
-        points.append(DataPoint(it->key, it->value));
-    }
-    qDebug() << "Extracted" << points.size() << "points from graph";
-    if (points.size() < 2) {
-        qDebug() << "ERROR: Not enough points";
-        return;
-    }
-    // DISTANCE-BASED CLUSTERING with threshold
-    QVector<QVector<DataPoint>> clusters;
-    double threshold = findNaturalThreshold(points);
-    qDebug() << "Using natural threshold:" << threshold;
-    for (const auto& point : points) {
-        bool addedToCluster = false;
-        // Try to add to existing cluster
-        for (auto& cluster : clusters) {
-            if (!cluster.isEmpty()) {
-                double dist = calculateDistance(point, cluster[0]);  // Distance to first point in cluster
-                if (dist < threshold) {
-                    cluster.append(point);
-                    addedToCluster = true;
-                    break;
-                }
-            }
-        }
-        // Create new cluster if point doesn't fit anywhere
-        if (!addedToCluster) {
-            QVector<DataPoint> newCluster;
-            newCluster.append(point);
-            clusters.append(newCluster);
-        }
-    }
-    qDebug() << "Distance clustering found" << clusters.size() << "clusters";
-    // Debug each cluster
-    for (int i = 0; i < clusters.size(); ++i) {
-        qDebug() << "Cluster" << i << "has" << clusters[i].size() << "points";
-    }
-
-    // Clear coordinate mapping
-    coordinateToCluster.clear();
-
-    // Plot each cluster
-    plot->clearGraphs();
-    qDebug() << "Cleared existing graphs";
-    for (int i = 0; i < clusters.size(); ++i) {
-        if (clusters[i].isEmpty()) continue;
-        plot->addGraph();
-        int colorIndex = (i * 15) % colorScheme.size();  // Skip colors for distinctness
-        QColor color(colorScheme[colorIndex]);
-        plot->graph(i)->setPen(QPen(color, 3));
-        plot->graph(i)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, color, color, 10));
-        plot->graph(i)->setLineStyle(QCPGraph::lsNone);
-        // Calculate center and add points
-        double sumX = 0, sumY = 0;
-        for (const auto& point : clusters[i])
-        {
-            plot->graph(i)->addData(point.x, point.y);
-
-            // Store coordinate to cluster mapping
-            coordinateToCluster[QPair<double, double>(point.x, point.y)] = i + 1;
-
-            sumX += point.x;
-            sumY += point.y;
-        }
-        // Add number label at center
-        double centerX = sumX / clusters[i].size();
-        double centerY = sumY / clusters[i].size();
-        double offsetX = 0.02;
-        double offsetY = 0.02;
-        QCPItemText *label = new QCPItemText(plot);
-        label->setPositionAlignment(Qt::AlignCenter);
-        label->position->setType(QCPItemPosition::ptPlotCoords);
-        label->position->setCoords(centerX + offsetX, centerY + offsetY);  // Add offset
-        label->setText(QString::number(i + 1));
-        label->setFont(QFont("Arial", 8, QFont::Bold));  // Smaller font: 14 -> 10
-        label->setPen(QPen(Qt::black));
-        label->setBrush(QBrush(Qt::white));
-        label->setPadding(QMargins(2, 2, 2, 2));  // Smaller padding: 4 -> 2
-        qDebug() << "Creating graph" << i << "with color index" << colorIndex << "and" << clusters[i].size() << "points";
-    }
-    plot->rescaleAxes();
-    plot->replot();
-    qDebug() << "FINAL: Created" << clusters.size() << "colored groups on plot";
-}
-
-double MainWindow::findNaturalThreshold(const QVector<DataPoint>& points) {
-    QVector<double> allDistances;
-
-    // Calculate all pairwise distances
-    for (int i = 0; i < points.size(); ++i) {
-        for (int j = i + 1; j < points.size(); ++j) {
-            double dist = calculateDistance(points[i], points[j]);
-            if (dist > 0) allDistances.append(dist);
-        }
-    }
-
-    std::sort(allDistances.begin(), allDistances.end());
-
-    qDebug() << "Distance range:" << allDistances.first() << "to" << allDistances.last();
-
-    // Find the biggest jump in distances - that's where clusters separate
-    double maxJumpRatio = 0;
-    double bestThreshold = 0;
-
-    for (int i = 100; i < allDistances.size() - 100; ++i) {  // Skip extremes
-        double currentDist = allDistances[i];
-        double nextDist = allDistances[i + 1];
-
-        if (currentDist > 0) {
-            double jumpRatio = nextDist / currentDist;
-
-            if (jumpRatio > maxJumpRatio) {
-                maxJumpRatio = jumpRatio;
-                bestThreshold = (currentDist + nextDist) / 2.0;
-            }
-        }
-    }
-
-    qDebug() << "Biggest distance jump ratio:" << maxJumpRatio << "at threshold:" << bestThreshold;
-    return bestThreshold;
-}
-
 void MainWindow::on_pushButtonPrepareCryosparc_clicked()
 {
 
 }
 
+void MainWindow::clusterAndRecolorBeamShifts(QCustomPlot* plot)
+{
+    using namespace alglib;
+    QElapsedTimer totalTimer, stepTimer;
+    totalTimer.start();
+    stepTimer.start();
+    QWidget *parentWidget = plot->parentWidget();
+    QLineEdit *textBox = parentWidget->findChild<QLineEdit*>("clustersTextBox");
+    int numClusters = textBox->text().toInt();
+    plot->clearItems();
+    qDebug() << "=== ALGLIB K-MEANS CLUSTERING START ===";
+    qDebug() << "Target clusters:" << numClusters;
+    if (!plot || plot->graphCount() == 0) {
+        qDebug() << "ERROR: Invalid plot or graph index";
+        return;
+    }
+    // Step 1: Extract beam shift coordinates
+    stepTimer.restart();
+    QVector<DataPoint> points;
+    auto dataContainer = plot->graph(0)->data();
+    for (auto it = dataContainer->begin(); it != dataContainer->end(); ++it) {
+        points.append(DataPoint(it->key, it->value));
+    }
+    qDebug() << "STEP 1 - Extract points:" << stepTimer.elapsed() << "ms";
+    qDebug() << "Total points extracted:" << points.size();
+    if (points.size() < numClusters) {
+        qDebug() << "ERROR: Not enough points for clustering. Need at least" << numClusters << "points";
+        return;
+    }
+    // Step 2: Setup ALGLIB data matrix
+    stepTimer.restart();
+    real_2d_array data;
+    data.setlength(points.size(), 2);
+    for (int i = 0; i < points.size(); ++i) {
+        data[i][0] = points[i].x;
+        data[i][1] = points[i].y;
+    }
+    qDebug() << "STEP 2 - Setup ALGLIB data matrix:" << stepTimer.elapsed() << "ms";
+    // Step 3: Run ALGLIB k-means
+    stepTimer.restart();
+    clusterizerstate s;
+    kmeansreport rep;
+    clusterizercreate(s);
+    clusterizersetpoints(s, data, 2);
+    clusterizersetkmeanslimits(s, 5, 100);
+    clusterizerrunkmeans(s, numClusters, rep);
+    qDebug() << "STEP 3 - K-means clustering:" << stepTimer.elapsed() << "ms";
+    qDebug() << "Iterations:" << rep.iterationscount;
+
+    // Generate distinct colors based on number of clusters
+    QList<QRgb> generatedColors;
+    for (int i = 0; i < numClusters; ++i) {
+        // Distribute hues evenly around the color wheel
+        double hue = (double(i) / numClusters) * 360.0;
+
+        // Alternate between high and medium saturation
+        double saturation = (i % 2 == 0) ? 0.9 : 0.6;
+
+        // Alternate between high and medium brightness
+        double value = (i % 3 == 0) ? 0.9 : 0.7;
+
+        QColor color = QColor::fromHsvF(hue/360.0, saturation, value);
+        generatedColors.append(color.rgb());
+    }
+
+    // Step 4: Plot results
+    stepTimer.restart();
+    plot->clearGraphs();
+    coordinateToCluster.clear();
+    for (int cluster = 0; cluster < numClusters; ++cluster) {
+        plot->addGraph();
+        QColor color(generatedColors[cluster]);
+        plot->graph(cluster)->setPen(QPen(color, 3));
+        plot->graph(cluster)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, color, color, 10));
+        plot->graph(cluster)->setLineStyle(QCPGraph::lsNone);
+    }
+    for (int i = 0; i < points.size(); ++i) {
+        int clusterID = rep.cidx[i];
+        plot->graph(clusterID)->addData(points[i].x, points[i].y);
+        coordinateToCluster[QPair<double, double>(points[i].x, points[i].y)] = clusterID + 1;
+    }
+    // Add cluster center labels
+    for (int cluster = 0; cluster < numClusters; ++cluster) {
+        double centerX = rep.c[cluster][0];
+        double centerY = rep.c[cluster][1];
+        QCPItemText *label = new QCPItemText(plot);
+        label->setPositionAlignment(Qt::AlignCenter);
+        label->position->setType(QCPItemPosition::ptPlotCoords);
+        label->position->setCoords(centerX, centerY);
+        label->setText(QString::number(cluster + 1));
+        label->setFont(QFont("Arial", 10, QFont::Bold));
+        label->setPen(QPen(Qt::black));
+        label->setBrush(QBrush(Qt::white));
+        label->setPadding(QMargins(2, 2, 2, 2));
+    }
+    plot->rescaleAxes();
+    plot->replot();
+    qDebug() << "STEP 4 - Plotting:" << stepTimer.elapsed() << "ms";
+    qDebug() << "TOTAL TIME:" << totalTimer.elapsed() << "ms";
+}
+
+void MainWindow::onRecalculateClustersClicked()
+{
+    QPushButton *button = qobject_cast<QPushButton*>(sender());
+    if (button) {
+        QWidget *parentWidget = button->parentWidget(); // beamShiftsWidget
+        QCustomPlot *plotBeamShifts = parentWidget->findChild<QCustomPlot*>();
+        if (plotBeamShifts) {
+            // Find which tab this plot belongs to
+            QWidget *tabGraph = parentWidget->parentWidget(); // the tab widget
+            int tabIndex = ui->tabWidgetGraph->indexOf(tabGraph);
+            // Get corresponding table widget from files tab
+            if (tabIndex >= 0 && tabIndex < ui->tabWidgetFiles->count()) {
+                QWidget *tableTab = ui->tabWidgetFiles->widget(tabIndex);
+                QTableWidget *tableWidget = tableTab->findChild<QTableWidget*>();
+                if (tableWidget) {
+                    // Rebuild single graph from table data for re-clustering
+                    plotBeamShifts->clearGraphs();
+                    plotBeamShifts->addGraph();
+                    plotBeamShifts->graph(0)->setScatterStyle(QCPScatterStyle::ssCross);
+                    plotBeamShifts->graph(0)->setLineStyle(QCPGraph::lsNone);
+                    // Add beam shift coordinates from table to single graph
+                    for (int tableRow = 0; tableRow < tableWidget->rowCount(); ++tableRow) {
+                        double beamX = tableWidget->item(tableRow, 12)->text().toDouble();
+                        double beamY = tableWidget->item(tableRow, 13)->text().toDouble();
+                        plotBeamShifts->graph(0)->addData(beamX, beamY);
+                    }
+                    // Run clustering with new parameters
+                    clusterAndRecolorBeamShifts(plotBeamShifts);
+
+                    qDebug() << "coordinateToCluster size:" << coordinateToCluster.size();
+
+                    // Update Group column with new cluster assignments
+                    for (int tableRow = 0; tableRow < tableWidget->rowCount(); ++tableRow) {
+                        double beamX = tableWidget->item(tableRow, 12)->text().toDouble();
+                        double beamY = tableWidget->item(tableRow, 13)->text().toDouble();
+                        int groupNumber = coordinateToCluster.value(QPair<double, double>(beamX, beamY), 0);
+
+                        //qDebug() << "Recalc - Updating row" << tableRow << "beamX:" << beamX << "beamY:" << beamY << "groupNumber:" << groupNumber;
+
+                        QTableWidgetItem *groupItem = new QTableWidgetItem(QString::number(groupNumber));
+                        groupItem->setFlags(groupItem->flags() ^ Qt::ItemIsEditable);
+                        groupItem->setTextAlignment(Qt::AlignCenter);
+                        tableWidget->setItem(tableRow, 20, groupItem);
+                    }
+                }
+            }
+        }
+    }
+}
