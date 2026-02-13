@@ -1,20 +1,19 @@
 cmake_minimum_required(VERSION 3.5)
-
 project(FindMyEPUdatasets VERSION 0.1 LANGUAGES CXX)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 find_package(Qt6 REQUIRED COMPONENTS PrintSupport)
-
+find_package(Qt6 REQUIRED COMPONENTS Graphs)
+find_package(Qt6 REQUIRED COMPONENTS GraphsWidgets)
+find_package(Qt6 REQUIRED COMPONENTS QuickWidgets)
+find_package(Armadillo REQUIRED)
+include_directories(${ARMADILLO_INCLUDE_DIRS})
 set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
@@ -23,7 +22,6 @@ set(PROJECT_SOURCES
         qcustomplot.h
         qcustomplot.cpp
 )
-
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(FindMyEPUdatasets
         MANUAL_FINALIZATION
@@ -46,11 +44,12 @@ else()
         )
     endif()
 endif()
-
 target_link_libraries(FindMyEPUdatasets PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 target_link_libraries(FindMyEPUdatasets PRIVATE Qt${QT_VERSION_MAJOR}::PrintSupport)
-
-
+target_link_libraries(FindMyEPUdatasets PRIVATE Qt${QT_VERSION_MAJOR}::Graphs)
+target_link_libraries(FindMyEPUdatasets PRIVATE Qt6::GraphsWidgets)
+target_link_libraries(FindMyEPUdatasets PRIVATE Qt${QT_VERSION_MAJOR}::QuickWidgets)
+target_link_libraries(FindMyEPUdatasets PRIVATE ${ARMADILLO_LIBRARIES})
 target_include_directories(FindMyEPUdatasets PRIVATE ../alglib/src)
 target_sources(FindMyEPUdatasets PRIVATE
     ../alglib/src/alglibinternal.cpp
@@ -70,11 +69,9 @@ set_target_properties(FindMyEPUdatasets PROPERTIES
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
 )
-
 install(TARGETS FindMyEPUdatasets
     BUNDLE DESTINATION .
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(FindMyEPUdatasets)
 endif()

@@ -231,7 +231,7 @@
    <widget class="QLabel" name="labelFindingTime">
     <property name="geometry">
      <rect>
-      <x>820</x>
+      <x>1010</x>
       <y>50</y>
       <width>141</width>
       <height>16</height>
@@ -265,6 +265,45 @@
     </property>
     <property name="text">
      <string>Prepare Cryosparc Project</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelJPGcount">
+    <property name="geometry">
+     <rect>
+      <x>660</x>
+      <y>50</y>
+      <width>141</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>JPG files found.</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelPNGcount">
+    <property name="geometry">
+     <rect>
+      <x>850</x>
+      <y>50</y>
+      <width>141</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>PNG files found.</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButtonTestQGraph">
+    <property name="geometry">
+     <rect>
+      <x>570</x>
+      <y>100</y>
+      <width>101</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Test QGraph</string>
     </property>
    </widget>
   </widget>

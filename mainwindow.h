@@ -8,7 +8,6 @@
 #include <vector>
 #include "qcustomplot.h"
 
-
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -28,6 +27,8 @@ private slots:
     void onRecalculateClustersClicked();
 
 
+    void on_pushButtonTestQGraph_clicked();
+
 private:
     Ui::MainWindow *ui;
     struct FileInfo
@@ -36,7 +37,8 @@ private:
         QString fileName;
         QString extension;
         QString baseName;
-        QString filePath;  // Add this field too since it's used in the move code
+        QString xmlPath;
+        QStringList imagePaths;
     };
     struct XMLData
     {
@@ -63,6 +65,30 @@ private:
         double value;
         double prominence;
     };
+    struct DoseAnalysisResults {
+        int    numPopulations  = 0;   // total populations found (main + outliers)
+        double mainMean        = 0.0;
+        double mainStd         = 0.0;
+        double minSeparation   = 1.0; // parameter used
+        int    keptCount       = 0;
+        int    rejectedCount   = 0;
+        double keptMeanDose    = 0.0;
+    };
+
+    // In mainwindow.h - add as class member:
+    struct DatasetInfo {
+        QString name;
+        int eerCount;
+        int tiffCount;
+        int mrcCount;
+        int jpgCount;
+        int pngCount;
+        int largeTiffCount;
+        int smallTiffCount;
+    };
+
+    QMap<QString, DatasetInfo> datasetInfoMap;
+    DoseAnalysisResults analyseAndFilterDose(QTableWidget *tableWidget, QCustomPlot *plotTotalDose,QLabel *statsLabel, double minSeparation = 1.0);
     void clusterAndRecolorBeamShifts(QCustomPlot* plot);
     QMap<QPair<double, double>, int> coordinateToCluster;
     QDir currentdir,startdir, destinationdir;
@@ -71,6 +97,10 @@ private:
     qint64 destinationdirectorysize;
     double meandose;
     QList<FileInfo> allFiles;
+    QStringList unmatchedJPGFiles;
+    QStringList unmatchedPNGFiles;
+    QStringList unmatchedTIFFFiles;
+    double calculateModeMAD(const QVector<double>& doses, double modeDose);
 
 };
 
