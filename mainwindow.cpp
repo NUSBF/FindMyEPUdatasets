@@ -1453,8 +1453,6 @@ void MainWindow::on_pushButtonMoviesDirectory_clicked()
             else if (extension == "eer" || extension == "tiff" || extension == "mrc" ||
                      extension == "jpg" || extension == "png")
             {
-                if (fullPath.contains("/metadata/"))
-                    continue;
                 QString baseName = QFileInfo(itAllFiles.fileName()).baseName();
                 imageFiles[baseName].append(fullPath);
 
